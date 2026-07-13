@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Cloud Costs Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f111a;
+            --card-bg: rgba(25, 28, 41, 0.65);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.4);
+            --border: rgba(255, 255, 255, 0.08);
+            --gradient-start: #3b82f6;
+            --gradient-end: #8b5cf6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-main) 0%, var(--text-muted) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .last-updated {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            background: var(--card-bg);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.3), 0 0 20px 0 var(--accent-glow);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .kpi-title {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+        }
+
+        .kpi-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .chart-card {
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-wrapper {
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 900px) {
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>Azure Cost Dashboard</h1>
+                <div class="subtitle">Cloud Infrastructure Expenditure Overview (Last 30 Days)</div>
+            </div>
+            <div class="last-updated" id="lastUpdated">Loading...</div>
+        </header>
+
+        <div id="content" style="display: none;">
+            <div class="kpi-container">
+                <div class="card">
+                    <div class="kpi-title">Total Cost</div>
+                    <div class="kpi-value" id="totalCost">$0.00</div>
+                </div>
+                <div class="card">
+                    <div class="kpi-title">Daily Average</div>
+                    <div class="kpi-value" id="dailyAvg">$0.00</div>
+                </div>
+                <div class="card">
+                    <div class="kpi-title">Highest Spending Group</div>
+                    <div class="kpi-value" id="topGroup" style="font-size: 1.5rem; padding-top: 0.5rem; background: var(--text-main); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">-</div>
+                </div>
+            </div>
+
+            <div class="charts-container">
+                <div class="card chart-card">
+                    <div class="chart-title">Daily Trend by Resource Group</div>
+                    <div class="chart-wrapper">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <div class="chart-title">Cost Distribution</div>
+                    <div class="chart-wrapper">
+                        <canvas id="doughnutChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">
+            Connecting to Data Source...
+        </div>
+    </div>
+
+    <script>
+        // Color palette for charts
+        const colors = [
+            '#3b82f6', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b', '#10b981', '#06b6d4'
+        ];
+
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Inter', sans-serif";
+
+        async function initDashboard() {
+            try {
+                // Fetch gerado pela Github Actions
+                const response = await fetch('data/mock-data.json');
+                if (!response.ok) throw new Error('Data not found');
+                const data = await response.json();
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+
+                document.getElementById('lastUpdated').textContent = `Last sync: ${data.last_updated}`;
+                
+                const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+                
+                document.getElementById('totalCost').textContent = formatCurrency(data.total_cost);
+                document.getElementById('dailyAvg').textContent = formatCurrency(data.total_cost / data.daily_trends.length);
+
+                let maxCost = 0;
+                let topRg = '';
+                for (const [rg, cost] of Object.entries(data.total_by_resource_group)) {
+                    if (cost > maxCost) {
+                        maxCost = cost;
+                        topRg = rg;
+                    }
+                }
+                document.getElementById('topGroup').textContent = topRg;
+
+                renderCharts(data);
+
+            } catch (error) {
+                document.getElementById('loading').textContent = 'Error loading data. Certifique-se de rodar a pipeline (Github Actions) que vai gerar a pasta data/.';
+                document.getElementById('loading').style.color = '#ef4444';
+                console.error(error);
+            }
+        }
+
+        function renderCharts(data) {
+            const labels = data.daily_trends.map(d => d.date.substring(5)); // Just MM-DD
+            const resourceGroups = Object.keys(data.total_by_resource_group);
+            
+            const datasets = resourceGroups.map((rg, index) => {
+                return {
+                    label: rg,
+                    data: data.daily_trends.map(d => d.breakdown[rg]),
+                    backgroundColor: colors[index % colors.length],
+                    borderRadius: 4,
+                    borderSkipped: false
+                };
+            });
+
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            new Chart(ctxTrend, {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(15, 17, 26, 0.9)',
+                            titleColor: '#e2e8f0',
+                            bodyColor: '#e2e8f0',
+                            borderColor: 'rgba(255,255,255,0.1)',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { display: false, drawBorder: false } },
+                        y: { 
+                            stacked: true, 
+                            grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+                            ticks: { callback: (value) => '$' + value }
+                        }
+                    },
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                }
+            });
+
+            const ctxDoughnut = document.getElementById('doughnutChart').getContext('2d');
+            new Chart(ctxDoughnut, {
+                type: 'doughnut',
+                data: {
+                    labels: resourceGroups,
+                    datasets: [{
+                        data: resourceGroups.map(rg => data.total_by_resource_group[rg]),
+                        backgroundColor: colors.slice(0, resourceGroups.length),
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 17, 26, 0.9)',
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed !== null) {
+                                        label += new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(context.parsed);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        initDashboard();
+    </script>
+</body>
+</html>
